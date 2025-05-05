@@ -1,0 +1,144 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: terraform-service
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: terraform-config
+  namespace: terraform-service
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  TERRAFORM_WORKING_DIR: "/tmp/terraform"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  AZURE_LOCATION: "koreacentral"
+  AZURE_RESOURCE_GROUP: "rg-az01-co001501-sbox-poc-team02"
+  AZURE_SUBSCRIPTION_ID: "4793a72d-f4c1-4471-9327-e04225717278"
+  AZURE_USE_CLI_AUTH: "false"
+  ARM_USE_MSI: "false"
+  ARM_USE_CLI: "false"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: terraform-secrets
+  namespace: terraform-service
+type: Opaque
+data:
+  AZURE_ACR: "dGVhbTJmaW5hbC5henVyZWNyLmlv"  # base64 인코딩 값
+  AZURE_ACR_USERNAME: "dGVhbTJmaW5hbA=="  # base64 인코딩 값
+  AZURE_ACR_PASSWORD: "V3BLU3gvMnYvMEdPUWhBSFE1dmVKZHcrNjJLaXlkNG0zWUtxSGtHK2Q0K0FDUkJhMEloRw=="  # base64 인코딩 값
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: terraform-service-account
+  namespace: terraform-service
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: terraform-service-role
+  namespace: terraform-service
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: terraform-service-role-binding
+  namespace: terraform-service
+subjects:
+- kind: ServiceAccount
+  name: terraform-service-account
+  namespace: terraform-service
+roleRef:
+  kind: Role
+  name: terraform-service-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: terraform-service
+  namespace: terraform-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: terraform-service
+  template:
+    metadata:
+      labels:
+        app: terraform-service
+    spec:
+      serviceAccountName: terraform-service-account
+      imagePullSecrets:
+      - name: acr-auth
+      containers:
+      - name: terraform-service
+        image: team2final.azurecr.io/terraform-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: terraform-config
+        - secretRef:
+            name: terraform-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 10
+        volumeMounts:
+        - name: terraform-data
+          mountPath: /tmp/terraform
+      volumes:
+      - name: terraform-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: terraform-service
+  namespace: terraform-service
+spec:
+  selector:
+    app: terraform-service
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+---
