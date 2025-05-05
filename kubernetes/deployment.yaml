@@ -29,7 +29,7 @@ type: Opaque
 data:
   AZURE_ACR: "dGVhbTJmaW5hbC5henVyZWNyLmlv"  # base64 인코딩 값
   AZURE_ACR_USERNAME: "dGVhbTJmaW5hbA=="  # base64 인코딩 값
-  AZURE_ACR_PASSWORD: "V3BLU3gvMnYvMEdPUWhBSFE1dmVKZHcrNjJLaXlkNG0zWUtxSGtHK2Q0K0FDUkJhMEloRw=="  # base64 인코딩 값
+  AZURE_ACR_PASSWORD: "<acr password base64 인코딩 값"  # base64 인코딩 값
 ---
 apiVersion: v1
 kind: ServiceAccount
